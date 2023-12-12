@@ -1,9 +1,6 @@
 package com.springboot.jpa.springbootjpa.controller;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +21,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.springboot.jpa.springbootjpa.models.entity.Cliente;
 import com.springboot.jpa.springbootjpa.models.services.IClienteService;
+import com.springboot.jpa.springbootjpa.models.services.IUploadFileService;
 import com.springboot.jpa.springbootjpa.util.PageRender;
 
 import jakarta.validation.Valid;
@@ -36,6 +34,8 @@ public class ClienteController {
 
     @Autowired
     private IClienteService clienteService;
+    @Autowired
+    private IUploadFileService uploadFileService;
 
     @GetMapping(value = "/ver/{id}")
     public String ver(@PathVariable(value = "id") Long id, Map<String, Object> model, RedirectAttributes flash) {
@@ -113,16 +113,11 @@ public class ClienteController {
         }
 
         if(!foto.isEmpty()) {
-            Path directorioImagenes = Paths.get("src//main//resources//static/uploads");
-            String rutaAbsoluta = directorioImagenes.toFile().getAbsolutePath();
-            
-            try { 
-                byte[] bytes = foto.getBytes();
-                Path rutaCompleta = Paths.get(rutaAbsoluta + "//" + foto.getOriginalFilename());
-                Files.write(rutaCompleta, bytes);
-                flash.addFlashAttribute("info", "Ha subido correctamente " + foto.getOriginalFilename());
-
-                cliente.setFoto(foto.getOriginalFilename());
+            String uniqueFilename;
+            try {
+                uniqueFilename = uploadFileService.copy(foto);
+                flash.addFlashAttribute("info", "Ha subido correctamente " + uniqueFilename);
+                cliente.setFoto(uniqueFilename);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -140,8 +135,15 @@ public class ClienteController {
     @RequestMapping(value = "/eliminar/{id}")
     public String eliminar(@PathVariable(value = "id") Long id, RedirectAttributes flash) {
         if (id > 0) {
+            Cliente cliente = clienteService.findOne(id);
+
             clienteService.delete(id);
             flash.addFlashAttribute("success", "Cliente eliminado con exito");
+
+            //Eliminando la foto
+            if(uploadFileService.delete(cliente.getFoto())) {
+                flash.addFlashAttribute("info", "Foto " + cliente.getFoto() + " eliminada con éxito");
+            }
         }      
 
         return "redirect:/listar";
